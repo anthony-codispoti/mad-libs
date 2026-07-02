@@ -1,4 +1,4 @@
-const { getSupabase } = require('./_lib/supabase');
+const { getDb } = require('./_lib/db');
 const { computeNewBadges } = require('./_lib/badges');
 
 module.exports = async function handler(req, res) {
@@ -15,34 +15,31 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: 'rating or is_favorite must be provided' });
   }
 
-  const supabase = getSupabase();
-  const update = {};
-  if (rating !== undefined) update.rating = rating;
-  if (is_favorite !== undefined) update.is_favorite = is_favorite;
+  const sql = getDb();
 
-  const { data: story, error } = await supabase
-    .from('stories')
-    .update(update)
-    .eq('id', story_id)
-    .eq('profile_id', profile_id)
-    .select()
-    .single();
-  if (error) return res.status(500).json({ error: error.message });
+  const current = (await sql`select * from stories where id = ${story_id} and profile_id = ${profile_id}`)[0];
+  if (!current) return res.status(404).json({ error: 'story not found' });
+
+  const mergedRating = rating !== undefined ? rating : current.rating;
+  const mergedFavorite = is_favorite !== undefined ? is_favorite : current.is_favorite;
+
+  const rows = await sql`
+    update stories set rating = ${mergedRating}, is_favorite = ${mergedFavorite}
+    where id = ${story_id} and profile_id = ${profile_id}
+    returning *
+  `;
+  const story = rows[0];
 
   let newly_earned_badges = [];
   if (rating !== undefined) {
-    const { data: stats } = await supabase
-      .from('profile_stats')
-      .select('*')
-      .eq('profile_id', profile_id)
-      .single();
+    const stats = (await sql`select * from profile_stats where profile_id = ${profile_id}`)[0];
     if (stats) {
       const { newlyEarned, badgesEarned } = computeNewBadges(stats, { rating });
       if (newlyEarned.length > 0) {
-        await supabase
-          .from('profile_stats')
-          .update({ badges_earned: badgesEarned, updated_at: new Date().toISOString() })
-          .eq('profile_id', profile_id);
+        await sql`
+          update profile_stats set badges_earned = ${JSON.stringify(badgesEarned)}::jsonb, updated_at = now()
+          where profile_id = ${profile_id}
+        `;
       }
       newly_earned_badges = newlyEarned;
     }

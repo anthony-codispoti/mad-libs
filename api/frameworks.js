@@ -1,18 +1,15 @@
-const { getSupabase } = require('./_lib/supabase');
+const { getDb } = require('./_lib/db');
 
 module.exports = async function handler(req, res) {
-  const supabase = getSupabase();
+  const sql = getDb();
 
   if (req.method === 'GET') {
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
     const offset = parseInt(req.query.offset, 10) || 0;
-    const { data, error } = await supabase
-      .from('frameworks')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
-    if (error) return res.status(500).json({ error: error.message });
-    return res.status(200).json(data);
+    const rows = await sql`
+      select * from frameworks order by created_at desc limit ${limit} offset ${offset}
+    `;
+    return res.status(200).json(rows);
   }
 
   if (req.method === 'POST') {
@@ -20,35 +17,21 @@ module.exports = async function handler(req, res) {
     if (!topic || !template || !Array.isArray(blanks)) {
       return res.status(400).json({ error: 'topic, template, and blanks are required' });
     }
-    const { data, error } = await supabase
-      .from('frameworks')
-      .insert({
-        created_by_profile_id: created_by_profile_id || null,
-        topic,
-        title: title || null,
-        template,
-        blanks,
-        age_mode: age_mode || 'kid',
-      })
-      .select()
-      .single();
-    if (error) return res.status(500).json({ error: error.message });
+    const rows = await sql`
+      insert into frameworks (created_by_profile_id, topic, title, template, blanks, age_mode)
+      values (${created_by_profile_id || null}, ${topic}, ${title || null}, ${template},
+        ${JSON.stringify(blanks)}::jsonb, ${age_mode || 'kid'})
+      returning *
+    `;
 
     if (created_by_profile_id) {
-      const { data: stats } = await supabase
-        .from('profile_stats')
-        .select('frameworks_saved')
-        .eq('profile_id', created_by_profile_id)
-        .single();
-      if (stats) {
-        await supabase
-          .from('profile_stats')
-          .update({ frameworks_saved: (stats.frameworks_saved || 0) + 1 })
-          .eq('profile_id', created_by_profile_id);
-      }
+      await sql`
+        update profile_stats set frameworks_saved = coalesce(frameworks_saved, 0) + 1, updated_at = now()
+        where profile_id = ${created_by_profile_id}
+      `;
     }
 
-    return res.status(201).json(data);
+    return res.status(201).json(rows[0]);
   }
 
   res.setHeader('Allow', 'GET, POST');

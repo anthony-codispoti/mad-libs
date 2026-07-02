@@ -1,4 +1,4 @@
-const { getSupabase } = require('./_lib/supabase');
+const { getDb } = require('./_lib/db');
 const { currentMonth } = require('./_lib/costCap');
 
 module.exports = async function handler(req, res) {
@@ -12,23 +12,14 @@ module.exports = async function handler(req, res) {
     return res.status(401).json({ error: 'invalid_password' });
   }
 
-  const supabase = getSupabase();
+  const sql = getDb();
   const month = currentMonth();
 
-  const { error: insertError } = await supabase
-    .from('usage_monthly')
-    .insert({ month })
-    .select()
-    .maybeSingle();
-  if (insertError && insertError.code !== '23505') {
-    return res.status(500).json({ error: insertError.message });
-  }
-
-  const { error } = await supabase
-    .from('usage_monthly')
-    .update({ overridden: true, overridden_at: new Date().toISOString() })
-    .eq('month', month);
-  if (error) return res.status(500).json({ error: error.message });
+  await sql`
+    insert into usage_monthly (month, overridden, overridden_at)
+    values (${month}, true, now())
+    on conflict (month) do update set overridden = true, overridden_at = now()
+  `;
 
   return res.status(200).json({ overridden: true });
 };

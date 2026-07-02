@@ -1,5 +1,5 @@
 const OpenAI = require('openai');
-const { getSupabase } = require('./_lib/supabase');
+const { getDb } = require('./_lib/db');
 const { assertUnderCap, recordCost } = require('./_lib/costCap');
 const { ttsCostCents } = require('./_lib/pricing');
 
@@ -17,11 +17,11 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: 'profile_id is required' });
   }
 
-  const supabase = getSupabase();
+  const sql = getDb();
 
   let month;
   try {
-    month = await assertUnderCap(supabase);
+    month = await assertUnderCap(sql);
   } catch (err) {
     if (err.capReached) {
       return res.status(402).json({
@@ -51,7 +51,7 @@ module.exports = async function handler(req, res) {
 
   const ttsCents = ttsCostCents(text);
   try {
-    await recordCost(supabase, month, { ttsCents });
+    await recordCost(sql, month, { ttsCents });
   } catch (err) {
     // Non-fatal: still return the audio even if cost recording fails.
   }

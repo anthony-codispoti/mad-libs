@@ -1,5 +1,5 @@
--- Mad Libs App — Supabase schema
--- Run this once in the Supabase SQL Editor for your new project.
+-- Mad Libs App — Postgres schema (Neon)
+-- Run this once in the Neon SQL Editor (or via the Vercel project's Neon/Storage tab) for your new database.
 
 create extension if not exists pgcrypto;
 
@@ -68,15 +68,6 @@ create table profile_stats (
   badges_earned jsonb not null default '[]',
   updated_at timestamptz not null default now()
 );
-
-alter table profiles enable row level security;
-alter table frameworks enable row level security;
-alter table stories enable row level security;
-alter table usage_monthly enable row level security;
-alter table profile_stats enable row level security;
--- No policies added — only the service_role key (used server-side in /api) ever
--- touches this database, and service_role bypasses RLS. RLS is enabled anyway
--- as defense-in-depth (default-deny) in case a non-service key is ever exposed.
 
 -- record_ai_cost: atomic check-and-increment for the monthly spend cap.
 -- Call with p_claude_cents=0, p_tts_cents=0 as a pre-flight cap check before a

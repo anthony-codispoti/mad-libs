@@ -1,4 +1,4 @@
-const { getSupabase } = require('./_lib/supabase');
+const { getDb } = require('./_lib/db');
 const { computeNewBadges } = require('./_lib/badges');
 
 function todayUTC() {
@@ -11,18 +11,15 @@ function yesterdayUTC() {
   return d.toISOString().slice(0, 10);
 }
 
-async function updateStatsAfterStory(supabase, profileId, blanks, rating) {
-  const { data: stats } = await supabase
-    .from('profile_stats')
-    .select('*')
-    .eq('profile_id', profileId)
-    .single();
+async function updateStatsAfterStory(sql, profileId, blanks, rating) {
+  const stats = (await sql`select * from profile_stats where profile_id = ${profileId}`)[0];
 
   const today = todayUTC();
   let currentStreak = stats.current_streak_days || 0;
-  if (stats.last_completed_date === yesterdayUTC()) {
+  const lastCompleted = stats.last_completed_date ? new Date(stats.last_completed_date).toISOString().slice(0, 10) : null;
+  if (lastCompleted === yesterdayUTC()) {
     currentStreak += 1;
-  } else if (stats.last_completed_date !== today) {
+  } else if (lastCompleted !== today) {
     currentStreak = 1;
   }
   const longestStreak = Math.max(stats.longest_streak_days || 0, currentStreak);
@@ -53,39 +50,33 @@ async function updateStatsAfterStory(supabase, profileId, blanks, rating) {
   const { newlyEarned, badgesEarned } = computeNewBadges(updatedStats, { rating });
   updatedStats.badges_earned = badgesEarned;
 
-  const { data: saved, error } = await supabase
-    .from('profile_stats')
-    .update({
-      stories_completed: updatedStats.stories_completed,
-      current_streak_days: updatedStats.current_streak_days,
-      longest_streak_days: updatedStats.longest_streak_days,
-      last_completed_date: updatedStats.last_completed_date,
-      word_type_counts: updatedStats.word_type_counts,
-      favorite_word_type: updatedStats.favorite_word_type,
-      badges_earned: updatedStats.badges_earned,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('profile_id', profileId)
-    .select()
-    .single();
-  if (error) throw error;
+  const rows = await sql`
+    update profile_stats set
+      stories_completed = ${updatedStats.stories_completed},
+      current_streak_days = ${updatedStats.current_streak_days},
+      longest_streak_days = ${updatedStats.longest_streak_days},
+      last_completed_date = ${updatedStats.last_completed_date},
+      word_type_counts = ${JSON.stringify(updatedStats.word_type_counts)}::jsonb,
+      favorite_word_type = ${updatedStats.favorite_word_type},
+      badges_earned = ${JSON.stringify(updatedStats.badges_earned)}::jsonb,
+      updated_at = now()
+    where profile_id = ${profileId}
+    returning *
+  `;
 
-  return { stats: saved, newly_earned_badges: newlyEarned };
+  return { stats: rows[0], newly_earned_badges: newlyEarned };
 }
 
 module.exports = async function handler(req, res) {
-  const supabase = getSupabase();
+  const sql = getDb();
 
   if (req.method === 'GET') {
     const { profile_id } = req.query || {};
     if (!profile_id) return res.status(400).json({ error: 'profile_id query param is required' });
-    const { data, error } = await supabase
-      .from('stories')
-      .select('*')
-      .eq('profile_id', profile_id)
-      .order('created_at', { ascending: false });
-    if (error) return res.status(500).json({ error: error.message });
-    return res.status(200).json(data);
+    const rows = await sql`
+      select * from stories where profile_id = ${profile_id} order by created_at desc
+    `;
+    return res.status(200).json(rows);
   }
 
   if (req.method === 'POST') {
@@ -106,24 +97,18 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const insert = {
-      profile_id,
-      framework_id: framework_id || null,
-      title: title || null,
-      template,
-      blanks,
-      filled_words,
-      assembled_text,
-    };
-    if (rating !== undefined) insert.rating = rating;
-    if (is_favorite !== undefined) insert.is_favorite = is_favorite;
-
-    const { data: story, error } = await supabase.from('stories').insert(insert).select().single();
-    if (error) return res.status(500).json({ error: error.message });
+    const rows = await sql`
+      insert into stories (profile_id, framework_id, title, template, blanks, filled_words, assembled_text, rating, is_favorite)
+      values (${profile_id}, ${framework_id || null}, ${title || null}, ${template},
+        ${JSON.stringify(blanks)}::jsonb, ${JSON.stringify(filled_words)}::jsonb, ${assembled_text},
+        ${rating ?? null}, ${is_favorite ?? false})
+      returning *
+    `;
+    const story = rows[0];
 
     let statsResult = { stats: null, newly_earned_badges: [] };
     try {
-      statsResult = await updateStatsAfterStory(supabase, profile_id, blanks, rating);
+      statsResult = await updateStatsAfterStory(sql, profile_id, blanks, rating);
     } catch (e) {
       // Story is already saved; stats update failure shouldn't fail the request.
     }
@@ -136,8 +121,7 @@ module.exports = async function handler(req, res) {
     if (!id || !profile_id) {
       return res.status(400).json({ error: 'id and profile_id query params are required' });
     }
-    const { error } = await supabase.from('stories').delete().eq('id', id).eq('profile_id', profile_id);
-    if (error) return res.status(500).json({ error: error.message });
+    await sql`delete from stories where id = ${id} and profile_id = ${profile_id}`;
     return res.status(204).end();
   }
 

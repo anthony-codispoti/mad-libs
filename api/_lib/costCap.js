@@ -7,16 +7,10 @@ function currentMonth() {
 // Pre-flight check: throws { capReached: true, current_cents, cap_cents } if the
 // month is already over the cap and not overridden. Call this BEFORE making any
 // paid API call.
-async function assertUnderCap(supabase) {
+async function assertUnderCap(sql) {
   const month = currentMonth();
-  const { data, error } = await supabase.rpc('record_ai_cost', {
-    p_month: month,
-    p_claude_cents: 0,
-    p_tts_cents: 0,
-    p_cap_cents: MONTHLY_CAP_CENTS,
-  });
-  if (error) throw error;
-  const row = data[0];
+  const rows = await sql`select * from record_ai_cost(${month}, 0, 0, ${MONTHLY_CAP_CENTS})`;
+  const row = rows[0];
   if (row.was_capped) {
     const err = new Error('cap_reached');
     err.capReached = true;
@@ -28,14 +22,8 @@ async function assertUnderCap(supabase) {
 }
 
 // Post-call recording: call AFTER a paid API call succeeds, with the real cost.
-async function recordCost(supabase, month, { claudeCents = 0, ttsCents = 0 }) {
-  const { error } = await supabase.rpc('record_ai_cost', {
-    p_month: month,
-    p_claude_cents: claudeCents,
-    p_tts_cents: ttsCents,
-    p_cap_cents: MONTHLY_CAP_CENTS,
-  });
-  if (error) throw error;
+async function recordCost(sql, month, { claudeCents = 0, ttsCents = 0 }) {
+  await sql`select * from record_ai_cost(${month}, ${claudeCents}, ${ttsCents}, ${MONTHLY_CAP_CENTS})`;
 }
 
 module.exports = { currentMonth, assertUnderCap, recordCost, MONTHLY_CAP_CENTS };

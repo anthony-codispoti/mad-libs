@@ -1,4 +1,4 @@
-const { getSupabase } = require('./_lib/supabase');
+const { getDb } = require('./_lib/db');
 const { MONTHLY_CAP_CENTS } = require('./_lib/pricing');
 const { currentMonth } = require('./_lib/costCap');
 
@@ -8,18 +8,14 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const supabase = getSupabase();
+  const sql = getDb();
   const month = currentMonth();
 
-  const { data, error } = await supabase
-    .from('usage_monthly')
-    .select('*')
-    .eq('month', month)
-    .maybeSingle();
-  if (error) return res.status(500).json({ error: error.message });
+  const rows = await sql`select * from usage_monthly where month = ${month}`;
+  const row = rows[0];
 
-  const totalCents = data ? Number(data.total_cost_cents) : 0;
-  const overridden = data ? data.overridden : false;
+  const totalCents = row ? Number(row.total_cost_cents) : 0;
+  const overridden = row ? row.overridden : false;
 
   return res.status(200).json({
     month,

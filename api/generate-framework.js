@@ -1,5 +1,5 @@
 const Anthropic = require('@anthropic-ai/sdk');
-const { getSupabase } = require('./_lib/supabase');
+const { getDb } = require('./_lib/db');
 const { assertUnderCap, recordCost } = require('./_lib/costCap');
 const { claudeCostCents } = require('./_lib/pricing');
 
@@ -43,16 +43,14 @@ const AGE_MODE_INSTRUCTIONS = {
   adult: 'This is for adults. You may use more mature humor and themes, but keep it in good taste and non-explicit.',
 };
 
-async function buildPersonalizationContext(supabase, profileId) {
+async function buildPersonalizationContext(sql, profileId) {
   if (!profileId) return '';
-  const { data } = await supabase
-    .from('stories')
-    .select('title, template, rating')
-    .eq('profile_id', profileId)
-    .gte('rating', 4)
-    .order('rating', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(5);
+  const data = await sql`
+    select title, template, rating from stories
+    where profile_id = ${profileId} and rating >= 4
+    order by rating desc, created_at desc
+    limit 5
+  `;
 
   if (!data || data.length === 0) return '';
 
@@ -71,21 +69,18 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: 'profile_id and topic are required' });
   }
 
-  const supabase = getSupabase();
+  const sql = getDb();
 
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('age_mode')
-    .eq('id', profile_id)
-    .single();
-  if (profileError || !profile) {
+  const profileRows = await sql`select age_mode from profiles where id = ${profile_id}`;
+  const profile = profileRows[0];
+  if (!profile) {
     return res.status(404).json({ error: 'profile not found' });
   }
   const ageMode = profile.age_mode || 'kid';
 
   let month;
   try {
-    month = await assertUnderCap(supabase);
+    month = await assertUnderCap(sql);
   } catch (err) {
     if (err.capReached) {
       return res.status(402).json({
@@ -97,7 +92,7 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 
-  const personalization = await buildPersonalizationContext(supabase, profile_id);
+  const personalization = await buildPersonalizationContext(sql, profile_id);
 
   const systemPrompt = `You write funny Mad Libs-style story templates. Given a topic, create a short story (150-300 words) with 8-15 blanks for the reader to fill in. ${AGE_MODE_INSTRUCTIONS[ageMode] || AGE_MODE_INSTRUCTIONS.kid}
 
@@ -138,7 +133,7 @@ ${personalization}`.trim();
 
   const claudeCents = claudeCostCents(response.usage);
   try {
-    await recordCost(supabase, month, { claudeCents });
+    await recordCost(sql, month, { claudeCents });
   } catch (err) {
     // Cost recording failure shouldn't block the user from getting their story.
   }
