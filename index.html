@@ -207,7 +207,7 @@ async function refreshProfiles(){
   setState({ profiles, activeProfile: active || S.activeProfile });
 }
 async function loadMyStories(){
-  setState({ loading: true });
+  setState({ loading: true, error: null });
   try {
     const myStories = await api(`/api/stories?profile_id=${S.activeProfile.id}`);
     setState({ myStories, loading: false, screen: 'myStories' });
@@ -216,7 +216,7 @@ async function loadMyStories(){
   }
 }
 async function loadFrameworks(){
-  setState({ loading: true });
+  setState({ loading: true, error: null });
   try {
     const frameworksList = await api('/api/frameworks');
     setState({ frameworksList, loading: false, screen: 'frameworkBrowser' });
@@ -225,7 +225,7 @@ async function loadFrameworks(){
   }
 }
 async function loadUsage(){
-  setState({ loading: true });
+  setState({ loading: true, error: null });
   try {
     const usage = await api('/api/usage');
     setState({ usage, loading: false, screen: 'settings' });
@@ -429,6 +429,7 @@ function screenHome(){
     : '';
   return `
     ${celebration}
+    ${S.error ? `<div class="error-box mb12">${eh(S.error)}</div>` : ''}
     <div class="row" style="justify-content:space-between;align-items:center;">
       <h2>${eh(p.avatar_emoji || '🙂')} ${eh(p.name)}</h2>
       <button class="gear" id="settingsBtn" title="Settings">⚙️</button>
@@ -597,8 +598,9 @@ function bindRateAndSave(){
 }
 
 function screenMyStories(){
+  const errorBanner = S.error ? `<div class="error-box mb12">${eh(S.error)}</div>` : '';
   if (S.myStories.length === 0) {
-    return `${renderHeader('My Stories', true)}<p class="text-center text-muted">No stories yet — go make one!</p>`;
+    return `${renderHeader('My Stories', true)}${errorBanner}<p class="text-center text-muted">No stories yet — go make one!</p>`;
   }
   const items = S.myStories.map((s) => `
     <div class="story-item" data-id="${s.id}">
@@ -609,7 +611,7 @@ function screenMyStories(){
       <div class="text-sm text-muted">${new Date(s.created_at).toLocaleDateString()}</div>
     </div>
   `).join('');
-  return `${renderHeader('My Stories', true)}${items}`;
+  return `${renderHeader('My Stories', true)}${errorBanner}${items}`;
 }
 function bindMyStories(){
   on('backBtn', 'click', () => setState({ screen: 'home' }));
@@ -631,8 +633,9 @@ function bindMyStories(){
 }
 
 function screenFrameworkBrowser(){
+  const errorBanner = S.error ? `<div class="error-box mb12">${eh(S.error)}</div>` : '';
   if (S.frameworksList.length === 0) {
-    return `${renderHeader('Shared Frameworks', true)}<p class="text-center text-muted">No saved frameworks yet.</p>`;
+    return `${renderHeader('Shared Frameworks', true)}${errorBanner}<p class="text-center text-muted">No saved frameworks yet.</p>`;
   }
   const items = S.frameworksList.map((f) => `
     <div class="story-item" data-id="${f.id}">
@@ -640,7 +643,7 @@ function screenFrameworkBrowser(){
       <div class="text-sm text-muted">${eh(f.topic)} · ${f.blanks.length} blanks</div>
     </div>
   `).join('');
-  return `${renderHeader('Shared Frameworks', true)}${items}`;
+  return `${renderHeader('Shared Frameworks', true)}${errorBanner}${items}`;
 }
 function bindFrameworkBrowser(){
   on('backBtn', 'click', () => setState({ screen: 'home' }));
@@ -662,6 +665,7 @@ function screenSettings(){
   const pct = Math.min(100, (usage.total_cents / usage.cap_cents) * 100);
   return `
     ${renderHeader('Settings', true)}
+    ${S.error ? `<div class="error-box mb12">${eh(S.error)}</div>` : ''}
     <div class="card">
       <h3>Content mode</h3>
       <select id="ageModeSelect">
