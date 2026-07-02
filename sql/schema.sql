@@ -83,20 +83,20 @@ declare
 begin
   insert into usage_monthly (month) values (p_month) on conflict (month) do nothing;
 
-  select * into v_row from usage_monthly where month = p_month for update;
+  select * into v_row from usage_monthly u where u.month = p_month for update;
 
   if v_row.total_cost_cents >= p_cap_cents and not v_row.overridden then
     return query select v_row.total_cost_cents, v_row.overridden, true;
     return;
   end if;
 
-  update usage_monthly
-    set claude_cost_cents = claude_cost_cents + p_claude_cents,
-        tts_cost_cents = tts_cost_cents + p_tts_cents,
-        total_cost_cents = total_cost_cents + p_claude_cents + p_tts_cents,
+  update usage_monthly u
+    set claude_cost_cents = u.claude_cost_cents + p_claude_cents,
+        tts_cost_cents = u.tts_cost_cents + p_tts_cents,
+        total_cost_cents = u.total_cost_cents + p_claude_cents + p_tts_cents,
         updated_at = now()
-    where month = p_month
-    returning usage_monthly.total_cost_cents, usage_monthly.overridden
+    where u.month = p_month
+    returning u.total_cost_cents, u.overridden
     into v_row.total_cost_cents, v_row.overridden;
 
   return query select v_row.total_cost_cents, v_row.overridden, false;
