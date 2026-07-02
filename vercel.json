@@ -1,0 +1,10 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "functions": {
+    "api/generate-framework.js": { "maxDuration": 60 },
+    "api/tts.js": { "maxDuration": 30 }
+  }
+}
