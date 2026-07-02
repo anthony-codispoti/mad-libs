@@ -4,9 +4,758 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mad Libs App</title>
+<style>
+:root{
+  --bg:#fdf6ec; --card:#ffffff; --text:#2b2b3a; --text2:#6b6b80;
+  --accent:#7c5cff; --accent2:#ff9770; --success:#2ecc71; --danger:#ef476f;
+  --border:#eee2d0; --rs:14px; --rl:20px;
+}
+*{box-sizing:border-box;}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);}
+#app{max-width:640px;margin:0 auto;padding:20px 16px 60px;}
+h1,h2,h3{margin:0 0 8px;}
+p{margin:0 0 12px;line-height:1.5;}
+.card{background:var(--card);border-radius:var(--rl);padding:20px;box-shadow:0 2px 10px rgba(0,0,0,.05);margin-bottom:16px;}
+.btn{display:inline-block;border:none;border-radius:var(--rs);padding:12px 20px;font-size:1rem;font-weight:600;cursor:pointer;transition:transform .1s;}
+.btn:active{transform:scale(.97);}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-secondary{background:#f1eee6;color:var(--text);}
+.btn-danger{background:var(--danger);color:#fff;}
+.btn-full{width:100%;}
+.btn-lg{padding:16px 24px;font-size:1.1rem;}
+.row{display:flex;gap:10px;flex-wrap:wrap;}
+.mt8{margin-top:8px;} .mt12{margin-top:12px;} .mt16{margin-top:16px;} .mt20{margin-top:20px;}
+.mb4{margin-bottom:4px;} .mb8{margin-bottom:8px;} .mb12{margin-bottom:12px;}
+.text-center{text-align:center;} .text-muted{color:var(--text2);}
+.text-sm{font-size:.85rem;}
+input[type=text],input[type=number],input[type=password],textarea,select{
+  width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:var(--rs);
+  font-size:1rem;background:#fff;color:var(--text);
+}
+textarea{min-height:80px;resize:vertical;}
+.profile-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:12px;}
+.profile-card{background:var(--card);border-radius:var(--rl);padding:16px 8px;text-align:center;cursor:pointer;border:2px solid transparent;box-shadow:0 2px 10px rgba(0,0,0,.05);}
+.profile-card:hover{border-color:var(--accent);}
+.profile-avatar{font-size:2.4rem;margin-bottom:6px;}
+.add-profile-card{display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text2);border:2px dashed var(--border);background:transparent;box-shadow:none;}
+.spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.error-box{background:#fdecef;color:var(--danger);padding:10px 14px;border-radius:var(--rs);font-size:.9rem;}
+.blank-block{background:#faf7f0;border-radius:var(--rs);padding:14px;margin-bottom:12px;}
+.blank-label{font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+.chip-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+.suggestion-chip{background:#fff;border:1px solid var(--border);border-radius:999px;padding:6px 14px;font-size:.9rem;cursor:pointer;}
+.suggestion-chip.selected{background:var(--accent);color:#fff;border-color:var(--accent);}
+.input-error{border-color:var(--danger)!important;}
+.blank-error-msg{color:var(--danger);font-size:.82rem;margin-top:4px;min-height:1em;}
+.progress-strip{font-weight:600;color:var(--text2);margin-bottom:10px;}
+.story-reveal-box{border-radius:var(--rl);padding:24px;font-size:1.15rem;line-height:1.8;}
+.story-word{font-weight:700;color:var(--accent);}
+.star-row{display:flex;gap:6px;font-size:2rem;cursor:pointer;}
+.star{opacity:.3;}
+.star.filled{opacity:1;}
+.story-item{background:var(--card);border-radius:var(--rs);padding:12px 16px;margin-bottom:10px;cursor:pointer;box-shadow:0 1px 6px rgba(0,0,0,.04);}
+.badge-strip{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}
+.badge-pill{font-size:1.4rem;opacity:.25;}
+.badge-pill.earned{opacity:1;}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50;}
+.overlay-card{background:#fff;border-radius:var(--rl);padding:24px;max-width:380px;width:100%;}
+.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 18px;border-radius:999px;font-size:.9rem;z-index:60;}
+.usage-bar-outer{background:#eee;border-radius:999px;height:12px;overflow:hidden;}
+.usage-bar-inner{background:var(--accent);height:100%;}
+.gear{cursor:pointer;font-size:1.4rem;background:none;border:none;}
+.favorite-toggle{cursor:pointer;font-size:1.5rem;background:none;border:none;}
+</style>
 </head>
 <body>
-<h1>Mad Libs App</h1>
-<p>Under construction.</p>
+<div id="app"></div>
+<script>
+const S = {
+  screen: 'boot',
+  profiles: [],
+  activeProfile: null,
+  loading: false,
+  error: null,
+  topic: '',
+  framework: null,
+  filledWords: {},
+  currentFrameworkId: null,
+  frameworkSaved: false,
+  revealed: null,
+  viewingSavedStory: null,
+  pendingRating: 0,
+  pendingFavorite: false,
+  myStories: [],
+  frameworksList: [],
+  usage: null,
+  showOverridePrompt: false,
+  overrideError: null,
+  overrideBusy: false,
+  ttsLoading: false,
+  audioUrl: null,
+  celebrationBadges: [],
+};
+let pendingRetryFn = null;
+
+function eh(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function setState(patch){ Object.assign(S, patch); render(); }
+function on(id, evt, fn){ const el = document.getElementById(id); if (el) el.addEventListener(evt, fn); }
+function qs(sel){ return document.querySelector(sel); }
+function qsa(sel){ return Array.from(document.querySelectorAll(sel)); }
+
+async function api(path, opts = {}){
+  const res = await fetch(path, {
+    method: opts.method || 'GET',
+    headers: opts.body ? { 'Content-Type': 'application/json' } : undefined,
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  const contentType = res.headers.get('content-type') || '';
+  const data = contentType.includes('application/json') ? await res.json().catch(() => null) : null;
+  if (!res.ok) {
+    const err = new Error((data && data.error) || `Request failed: ${res.status}`);
+    err.status = res.status;
+    err.data = data;
+    throw err;
+  }
+  return data;
+}
+
+async function fetchAudioUrl(path, body){
+  const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    const err = new Error((data && data.error) || 'Audio request failed');
+    err.status = res.status; err.data = data;
+    throw err;
+  }
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
+function handleCapReached(retryFn){
+  pendingRetryFn = retryFn;
+  setState({ showOverridePrompt: true, overrideError: null });
+}
+
+const THEMES = [
+  { id: 'jungle', keywords: ['animal','jungle','safari','zoo','forest'], gradient: 'linear-gradient(135deg,#d9f2e6,#b7e4c7)' },
+  { id: 'space', keywords: ['space','alien','astronaut','planet','moon','rocket'], gradient: 'linear-gradient(135deg,#e4e0fb,#c9c2f2)' },
+  { id: 'ocean', keywords: ['ocean','sea','pirate','fish','beach','underwater'], gradient: 'linear-gradient(135deg,#cdeffd,#8ecae6)' },
+  { id: 'castle', keywords: ['castle','dragon','knight','fairy','magic','wizard'], gradient: 'linear-gradient(135deg,#f3e8ff,#d8bfff)' },
+  { id: 'birthday', keywords: ['birthday','party','cake','celebration'], gradient: 'linear-gradient(135deg,#ffe3ec,#ffc2d1)' },
+  { id: 'school', keywords: ['school','classroom','teacher','homework'], gradient: 'linear-gradient(135deg,#fff3cd,#ffe08a)' },
+  { id: 'sports', keywords: ['sports','soccer','basketball','game','team'], gradient: 'linear-gradient(135deg,#dbeeff,#a9d6ff)' },
+  { id: 'default', keywords: [], gradient: 'linear-gradient(135deg,#f5f0e6,#e8ddc8)' },
+];
+function pickTheme(topic){
+  const lower = (topic || '').toLowerCase();
+  const matches = THEMES.filter((t) => t.keywords.some((k) => lower.includes(k)));
+  if (matches.length) return matches[Math.floor(Math.random() * matches.length)];
+  const rest = THEMES.filter((t) => t.id !== 'default');
+  return rest[Math.floor(Math.random() * rest.length)];
+}
+
+const ALL_BADGES = [
+  { id: 'first_story', icon: '📖', name: 'First Story' },
+  { id: 'five_stories', icon: '🎉', name: 'Story Squad' },
+  { id: 'ten_stories', icon: '🏆', name: 'Mad Libs Master' },
+  { id: 'week_streak', icon: '🔥', name: 'Week Streak' },
+  { id: 'five_star', icon: '⭐', name: 'Five Star Fan' },
+  { id: 'framework_saver', icon: '💾', name: 'Framework Fanatic' },
+];
+
+function splitTemplateClient(template, blanks, filledWords){
+  const blanksById = new Map(blanks.map((b) => [b.id, b]));
+  const parts = [];
+  const regex = /\{\{(.*?)\}\}/g;
+  let lastIndex = 0;
+  let match;
+  while ((match = regex.exec(template)) !== null) {
+    if (match.index > lastIndex) parts.push({ type: 'text', value: template.slice(lastIndex, match.index) });
+    const blankId = match[1];
+    const blank = blanksById.get(blankId);
+    parts.push({ type: 'blank', blank_id: blankId, word: filledWords[blankId] || '', emoji: blank?.emoji || '' });
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < template.length) parts.push({ type: 'text', value: template.slice(lastIndex) });
+  return parts;
+}
+
+function renderStoryParts(parts){
+  return parts.map((p) => p.type === 'text'
+    ? eh(p.value)
+    : `<span class="story-word">${eh(p.word)} ${eh(p.emoji)}</span>`
+  ).join('');
+}
+
+/* ---------- Data loaders ---------- */
+async function boot(){
+  setState({ loading: true });
+  try {
+    const profiles = await api('/api/profiles');
+    setState({ profiles, screen: 'profilePicker', loading: false });
+  } catch (err) {
+    setState({ loading: false, error: err.message, screen: 'profilePicker' });
+  }
+}
+async function refreshProfiles(){
+  const profiles = await api('/api/profiles');
+  const active = S.activeProfile ? profiles.find((p) => p.id === S.activeProfile.id) : null;
+  setState({ profiles, activeProfile: active || S.activeProfile });
+}
+async function loadMyStories(){
+  setState({ loading: true });
+  try {
+    const myStories = await api(`/api/stories?profile_id=${S.activeProfile.id}`);
+    setState({ myStories, loading: false, screen: 'myStories' });
+  } catch (err) {
+    setState({ loading: false, error: err.message });
+  }
+}
+async function loadFrameworks(){
+  setState({ loading: true });
+  try {
+    const frameworksList = await api('/api/frameworks');
+    setState({ frameworksList, loading: false, screen: 'frameworkBrowser' });
+  } catch (err) {
+    setState({ loading: false, error: err.message });
+  }
+}
+async function loadUsage(){
+  setState({ loading: true });
+  try {
+    const usage = await api('/api/usage');
+    setState({ usage, loading: false, screen: 'settings' });
+  } catch (err) {
+    setState({ loading: false, error: err.message });
+  }
+}
+
+/* ---------- Actions ---------- */
+async function createProfile(name, age, avatar_emoji){
+  setState({ loading: true, error: null });
+  try {
+    await api('/api/profiles', { method: 'POST', body: { name, age: age || undefined, avatar_emoji } });
+    const profiles = await api('/api/profiles');
+    setState({ profiles, loading: false });
+  } catch (err) {
+    setState({ loading: false, error: err.message });
+  }
+}
+
+async function generateFramework(){
+  setState({ loading: true, error: null });
+  try {
+    const data = await api('/api/generate-framework', { method: 'POST', body: { profile_id: S.activeProfile.id, topic: S.topic } });
+    setState({
+      framework: data, filledWords: {}, currentFrameworkId: null, frameworkSaved: false,
+      loading: false, screen: 'blanksList',
+    });
+  } catch (err) {
+    setState({ loading: false });
+    if (err.status === 402) return handleCapReached(generateFramework);
+    setState({ error: err.message });
+  }
+}
+
+async function revealStory(){
+  const filled_words = Object.entries(S.filledWords).map(([blank_id, word]) => ({ blank_id, word }));
+  try {
+    const data = await api('/api/assemble-story', {
+      method: 'POST',
+      body: { template: S.framework.template, blanks: S.framework.blanks, filled_words, age_mode: S.framework.age_mode },
+    });
+    setState({ revealed: data, pendingRating: 0, pendingFavorite: false, audioUrl: null, screen: 'storyReveal' });
+  } catch (err) {
+    if (err.data && err.data.error === 'profanity_detected') {
+      (err.data.flagged_blank_ids || []).forEach((id) => {
+        const input = document.getElementById(`blank-input-${id}`);
+        const msg = document.getElementById(`blank-error-${id}`);
+        if (input) input.classList.add('input-error');
+        if (msg) msg.textContent = "Let's try a different word for this one!";
+      });
+      return;
+    }
+    setState({ error: err.message });
+  }
+}
+
+async function saveFramework(){
+  try {
+    const data = await api('/api/frameworks', {
+      method: 'POST',
+      body: {
+        created_by_profile_id: S.activeProfile.id, topic: S.topic, title: S.framework.title,
+        template: S.framework.template, blanks: S.framework.blanks, age_mode: S.framework.age_mode,
+      },
+    });
+    await refreshProfiles();
+    setState({ frameworkSaved: true, currentFrameworkId: data.id });
+  } catch (err) {
+    setState({ error: err.message });
+  }
+}
+
+async function playReadAloud(){
+  setState({ ttsLoading: true });
+  try {
+    const url = await fetchAudioUrl('/api/tts', { text: S.revealed.assembled_text, profile_id: S.activeProfile.id });
+    setState({ audioUrl: url, ttsLoading: false });
+    setTimeout(() => { const a = document.getElementById('ttsAudio'); if (a) a.play(); }, 0);
+  } catch (err) {
+    setState({ ttsLoading: false });
+    if (err.status === 402) return handleCapReached(playReadAloud);
+    setState({ error: err.message });
+  }
+}
+
+async function saveStory(){
+  const filled_words = Object.entries(S.filledWords).map(([blank_id, word]) => ({ blank_id, word }));
+  try {
+    const data = await api('/api/stories', {
+      method: 'POST',
+      body: {
+        profile_id: S.activeProfile.id, framework_id: S.currentFrameworkId, title: S.framework.title,
+        template: S.framework.template, blanks: S.framework.blanks, filled_words,
+        assembled_text: S.revealed.assembled_text, rating: S.pendingRating || undefined, is_favorite: S.pendingFavorite,
+      },
+    });
+    await refreshProfiles();
+    setState({ celebrationBadges: data.newly_earned_badges || [], screen: 'home' });
+  } catch (err) {
+    setState({ error: err.message });
+  }
+}
+
+async function submitOverridePassword(password){
+  setState({ overrideBusy: true, overrideError: null });
+  try {
+    await api('/api/override', { method: 'POST', body: { password } });
+    setState({ showOverridePrompt: false, overrideBusy: false });
+    const retry = pendingRetryFn;
+    pendingRetryFn = null;
+    if (retry) retry();
+  } catch (err) {
+    setState({ overrideBusy: false, overrideError: 'Incorrect password.' });
+  }
+}
+
+async function updateAgeMode(mode){
+  try {
+    await api(`/api/profiles?id=${S.activeProfile.id}`, { method: 'PATCH', body: { age_mode: mode } });
+    await refreshProfiles();
+    render();
+  } catch (err) {
+    setState({ error: err.message });
+  }
+}
+
+/* ---------- Screens ---------- */
+function renderHeader(title, back){
+  return `<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:16px;">
+    <div>${back ? `<button class="btn btn-secondary" id="backBtn">← Back</button>` : ''}</div>
+    <h2 style="margin:0;">${eh(title)}</h2>
+    <div style="width:64px;"></div>
+  </div>`;
+}
+
+function screenProfilePicker(){
+  const cards = S.profiles.map((p) => `
+    <div class="profile-card" data-id="${p.id}">
+      <div class="profile-avatar">${eh(p.avatar_emoji || '🙂')}</div>
+      <div>${eh(p.name)}</div>
+    </div>`).join('');
+  return `
+    <h1 class="text-center">📚 Mad Libs App</h1>
+    <p class="text-center text-muted">Who's playing?</p>
+    ${S.error ? `<div class="error-box mb12">${eh(S.error)}</div>` : ''}
+    <div class="profile-grid">
+      ${cards}
+      <div class="profile-card add-profile-card" id="addProfileCard">
+        <div class="profile-avatar">➕</div>
+        <div>Add profile</div>
+      </div>
+    </div>
+    <div class="card mt16" id="addProfileForm" style="display:none;">
+      <h3>New profile</h3>
+      <label class="text-sm">Name</label>
+      <input type="text" id="newProfileName" placeholder="Name">
+      <label class="text-sm mt8">Age (optional)</label>
+      <input type="number" id="newProfileAge" placeholder="Age" min="1" max="120">
+      <label class="text-sm mt8">Avatar</label>
+      <div class="row mt8">
+        ${['🙂','🦄','🐉','🚀','🐙','🦁','🌟','🍕'].map((e) => `<button type="button" class="btn btn-secondary avatar-choice" data-emoji="${e}">${e}</button>`).join('')}
+      </div>
+      <input type="hidden" id="newProfileEmoji" value="🙂">
+      <button class="btn btn-primary btn-full mt12" id="submitNewProfile">Create profile</button>
+    </div>
+  `;
+}
+function bindProfilePicker(){
+  qsa('.profile-card[data-id]').forEach((card) => {
+    card.addEventListener('click', () => {
+      const p = S.profiles.find((x) => x.id === card.dataset.id);
+      setState({ activeProfile: p, screen: 'home', celebrationBadges: [] });
+    });
+  });
+  on('addProfileCard', 'click', () => { qs('#addProfileForm').style.display = 'block'; });
+  qsa('.avatar-choice').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.getElementById('newProfileEmoji').value = btn.dataset.emoji;
+      qsa('.avatar-choice').forEach((b) => b.classList.toggle('btn-primary', b === btn));
+    });
+  });
+  on('submitNewProfile', 'click', () => {
+    const name = document.getElementById('newProfileName').value.trim();
+    if (!name) return;
+    const age = document.getElementById('newProfileAge').value;
+    const emoji = document.getElementById('newProfileEmoji').value;
+    createProfile(name, age ? Number(age) : undefined, emoji);
+  });
+}
+
+function screenHome(){
+  const p = S.activeProfile;
+  const stats = p.stats || {};
+  const badgeStrip = ALL_BADGES.map((b) => {
+    const earned = (stats.badges_earned || []).includes(b.id);
+    return `<span class="badge-pill ${earned ? 'earned' : ''}" title="${eh(b.name)}">${b.icon}</span>`;
+  }).join('');
+  const celebration = S.celebrationBadges.length
+    ? `<div class="toast">🎉 New badge: ${S.celebrationBadges.map((b) => `${b.icon} ${eh(b.name)}`).join(', ')}</div>`
+    : '';
+  return `
+    ${celebration}
+    <div class="row" style="justify-content:space-between;align-items:center;">
+      <h2>${eh(p.avatar_emoji || '🙂')} ${eh(p.name)}</h2>
+      <button class="gear" id="settingsBtn" title="Settings">⚙️</button>
+    </div>
+    <div class="card">
+      <div class="row text-sm text-muted mb8">
+        <span>🔥 ${stats.current_streak_days || 0} day streak</span>
+        <span>📖 ${stats.stories_completed || 0} stories</span>
+      </div>
+      <div class="badge-strip">${badgeStrip}</div>
+    </div>
+    <button class="btn btn-primary btn-full btn-lg" id="newStoryBtn">✏️ New Story</button>
+    <div class="row mt12">
+      <button class="btn btn-secondary" id="myStoriesBtn" style="flex:1;">📚 My Stories</button>
+      <button class="btn btn-secondary" id="browseFrameworksBtn" style="flex:1;">🔀 Browse Frameworks</button>
+    </div>
+    <div class="text-center mt16"><button class="btn btn-secondary" id="switchProfileBtn">Switch profile</button></div>
+  `;
+}
+function bindHome(){
+  on('newStoryBtn', 'click', () => setState({ screen: 'newStoryTopic', topic: '', error: null, celebrationBadges: [] }));
+  on('myStoriesBtn', 'click', loadMyStories);
+  on('browseFrameworksBtn', 'click', loadFrameworks);
+  on('settingsBtn', 'click', loadUsage);
+  on('switchProfileBtn', 'click', () => setState({ screen: 'profilePicker', activeProfile: null }));
+}
+
+function screenNewStoryTopic(){
+  if (S.loading) {
+    return `<div class="card text-center"><div class="spinner"></div><p class="mt12">Cooking up something silly...</p></div>`;
+  }
+  return `
+    ${renderHeader('New Story', true)}
+    ${S.error ? `<div class="error-box mb12">${eh(S.error)}</div>` : ''}
+    <div class="card">
+      <label>What should your story be about?</label>
+      <textarea id="topicInput" placeholder="e.g. a pizza-loving dragon">${eh(S.topic)}</textarea>
+      <button class="btn btn-primary btn-full mt12" id="submitTopicBtn">Let's write it! ✨</button>
+      <div class="text-center mt12"><a href="#" id="pickFrameworkLink" class="text-sm">Or pick a saved framework instead</a></div>
+    </div>
+  `;
+}
+function bindNewStoryTopic(){
+  on('backBtn', 'click', () => setState({ screen: 'home', error: null }));
+  on('submitTopicBtn', 'click', () => {
+    const topic = document.getElementById('topicInput').value.trim();
+    if (!topic) return;
+    setState({ topic, error: null });
+    generateFramework();
+  });
+  on('pickFrameworkLink', 'click', (e) => { e.preventDefault(); loadFrameworks(); });
+}
+
+function screenBlanksList(){
+  const blanks = S.framework.blanks;
+  const blocks = blanks.map((b) => `
+    <div class="blank-block">
+      <div class="blank-label">${eh(b.emoji)} ${eh(b.word_type)}</div>
+      <div class="chip-row">
+        ${(b.suggestions || []).map((s) => `<span class="suggestion-chip" data-blank-id="${b.id}" data-value="${eh(s)}">${eh(s)}</span>`).join('')}
+      </div>
+      <input type="text" class="blank-text-input" id="blank-input-${b.id}" data-blank-id="${b.id}" placeholder="Or type your own word" value="${eh(S.filledWords[b.id] || '')}">
+      <div class="blank-error-msg" id="blank-error-${b.id}"></div>
+    </div>
+  `).join('');
+  return `
+    ${renderHeader('Fill in the blanks', true)}
+    ${S.error ? `<div class="error-box mb12">${eh(S.error)}</div>` : ''}
+    <div class="progress-strip" id="blanksProgress">0 of ${blanks.length} filled</div>
+    <div id="blanksContainer">${blocks}</div>
+    <button class="btn btn-primary btn-full btn-lg mt12" id="revealBtn" disabled>Reveal my story! 🎉</button>
+  `;
+}
+function updateBlanksProgress(){
+  const total = S.framework.blanks.length;
+  const filled = S.framework.blanks.filter((b) => (S.filledWords[b.id] || '').trim()).length;
+  const progressEl = document.getElementById('blanksProgress');
+  if (progressEl) progressEl.textContent = `${filled} of ${total} filled`;
+  const btn = document.getElementById('revealBtn');
+  if (btn) btn.disabled = filled < total;
+}
+function clearBlankError(id){
+  const input = document.getElementById(`blank-input-${id}`);
+  const msg = document.getElementById(`blank-error-${id}`);
+  if (input) input.classList.remove('input-error');
+  if (msg) msg.textContent = '';
+}
+function bindBlanksList(){
+  on('backBtn', 'click', () => setState({ screen: 'home' }));
+  const container = document.getElementById('blanksContainer');
+  if (container) {
+    container.addEventListener('input', (e) => {
+      if (e.target.matches('.blank-text-input')) {
+        const id = e.target.dataset.blankId;
+        S.filledWords[id] = e.target.value;
+        clearBlankError(id);
+        updateBlanksProgress();
+      }
+    });
+    container.addEventListener('click', (e) => {
+      const chip = e.target.closest('.suggestion-chip');
+      if (!chip) return;
+      const id = chip.dataset.blankId;
+      const value = chip.dataset.value;
+      S.filledWords[id] = value;
+      const input = document.getElementById(`blank-input-${id}`);
+      if (input) input.value = value;
+      clearBlankError(id);
+      updateBlanksProgress();
+      qsa(`.suggestion-chip[data-blank-id="${id}"]`).forEach((c) => c.classList.toggle('selected', c === chip));
+    });
+  }
+  updateBlanksProgress();
+  on('revealBtn', 'click', revealStory);
+}
+
+function screenStoryReveal(){
+  const theme = pickTheme(S.topic);
+  return `
+    ${renderHeader('Your Story!', false)}
+    ${S.error ? `<div class="error-box mb12">${eh(S.error)}</div>` : ''}
+    <div class="card">
+      <div class="story-reveal-box" style="background:${theme.gradient};">
+        <h3>${eh(S.revealed.title || S.framework.title || 'Your Story')}</h3>
+        ${renderStoryParts(S.revealed.parts)}
+      </div>
+    </div>
+    ${S.audioUrl ? `<audio id="ttsAudio" src="${S.audioUrl}" controls style="width:100%;" class="mb12"></audio>` : ''}
+    <div class="row">
+      <button class="btn btn-secondary" id="readAloudBtn" ${S.ttsLoading ? 'disabled' : ''}>${S.ttsLoading ? 'Loading…' : '🔊 Read aloud'}</button>
+      <button class="btn btn-secondary" id="saveFrameworkBtn" ${S.frameworkSaved ? 'disabled' : ''}>${S.frameworkSaved ? '💾 Framework saved' : '💾 Save framework'}</button>
+    </div>
+    <button class="btn btn-primary btn-full btn-lg mt12" id="rateAndSaveBtn">⭐ Rate & Save</button>
+    <div class="text-center mt12"><button class="btn btn-secondary" id="newStoryFromRevealBtn">New Story</button></div>
+  `;
+}
+function bindStoryReveal(){
+  on('readAloudBtn', 'click', playReadAloud);
+  on('saveFrameworkBtn', 'click', saveFramework);
+  on('rateAndSaveBtn', 'click', () => setState({ screen: 'rateAndSave' }));
+  on('newStoryFromRevealBtn', 'click', () => setState({ screen: 'newStoryTopic', topic: '', error: null }));
+}
+
+function screenRateAndSave(){
+  return `
+    ${renderHeader('Rate this story', true)}
+    ${S.error ? `<div class="error-box mb12">${eh(S.error)}</div>` : ''}
+    <div class="card text-center">
+      <div class="star-row" id="starRow" style="justify-content:center;">
+        ${[1,2,3,4,5].map((n) => `<span class="star ${n <= S.pendingRating ? 'filled' : ''}" data-n="${n}">⭐</span>`).join('')}
+      </div>
+      <div class="mt12">
+        <button class="favorite-toggle" id="favoriteToggle">${S.pendingFavorite ? '❤️' : '🤍'} Favorite</button>
+      </div>
+      <button class="btn btn-primary btn-full btn-lg mt16" id="saveStoryBtn">Save to My Stories</button>
+    </div>
+  `;
+}
+function bindRateAndSave(){
+  on('backBtn', 'click', () => setState({ screen: 'storyReveal' }));
+  qsa('#starRow .star').forEach((star) => {
+    star.addEventListener('click', () => setState({ pendingRating: Number(star.dataset.n) }));
+  });
+  on('favoriteToggle', 'click', () => setState({ pendingFavorite: !S.pendingFavorite }));
+  on('saveStoryBtn', 'click', saveStory);
+}
+
+function screenMyStories(){
+  if (S.myStories.length === 0) {
+    return `${renderHeader('My Stories', true)}<p class="text-center text-muted">No stories yet — go make one!</p>`;
+  }
+  const items = S.myStories.map((s) => `
+    <div class="story-item" data-id="${s.id}">
+      <div class="row" style="justify-content:space-between;">
+        <strong>${eh(s.title || 'Untitled Story')}</strong>
+        <span>${s.is_favorite ? '❤️' : ''} ${s.rating ? '⭐'.repeat(s.rating) : ''}</span>
+      </div>
+      <div class="text-sm text-muted">${new Date(s.created_at).toLocaleDateString()}</div>
+    </div>
+  `).join('');
+  return `${renderHeader('My Stories', true)}${items}`;
+}
+function bindMyStories(){
+  on('backBtn', 'click', () => setState({ screen: 'home' }));
+  qsa('.story-item[data-id]').forEach((item) => {
+    item.addEventListener('click', () => {
+      const story = S.myStories.find((s) => s.id === item.dataset.id);
+      const filledWords = {};
+      (story.filled_words || []).forEach((fw) => { filledWords[fw.blank_id] = fw.word; });
+      const parts = splitTemplateClient(story.template, story.blanks, filledWords);
+      setState({
+        framework: { title: story.title, template: story.template, blanks: story.blanks, age_mode: 'kid' },
+        filledWords, topic: story.title || '',
+        revealed: { assembled_text: story.assembled_text, parts },
+        currentFrameworkId: story.framework_id, frameworkSaved: true,
+        audioUrl: null, screen: 'storyReveal',
+      });
+    });
+  });
+}
+
+function screenFrameworkBrowser(){
+  if (S.frameworksList.length === 0) {
+    return `${renderHeader('Shared Frameworks', true)}<p class="text-center text-muted">No saved frameworks yet.</p>`;
+  }
+  const items = S.frameworksList.map((f) => `
+    <div class="story-item" data-id="${f.id}">
+      <strong>${eh(f.title || f.topic)}</strong>
+      <div class="text-sm text-muted">${eh(f.topic)} · ${f.blanks.length} blanks</div>
+    </div>
+  `).join('');
+  return `${renderHeader('Shared Frameworks', true)}${items}`;
+}
+function bindFrameworkBrowser(){
+  on('backBtn', 'click', () => setState({ screen: 'home' }));
+  qsa('.story-item[data-id]').forEach((item) => {
+    item.addEventListener('click', () => {
+      const fw = S.frameworksList.find((f) => f.id === item.dataset.id);
+      setState({
+        framework: { title: fw.title, template: fw.template, blanks: fw.blanks, age_mode: fw.age_mode },
+        filledWords: {}, topic: fw.topic, currentFrameworkId: fw.id, frameworkSaved: true,
+        screen: 'blanksList',
+      });
+    });
+  });
+}
+
+function screenSettings(){
+  const p = S.activeProfile;
+  const usage = S.usage || { total_cents: 0, cap_cents: 500, overridden: false };
+  const pct = Math.min(100, (usage.total_cents / usage.cap_cents) * 100);
+  return `
+    ${renderHeader('Settings', true)}
+    <div class="card">
+      <h3>Content mode</h3>
+      <select id="ageModeSelect">
+        <option value="kid" ${p.age_mode === 'kid' ? 'selected' : ''}>Kid</option>
+        <option value="teen" ${p.age_mode === 'teen' ? 'selected' : ''}>Teen</option>
+        <option value="adult" ${p.age_mode === 'adult' ? 'selected' : ''}>Adult (profanity filter off)</option>
+      </select>
+    </div>
+    <div class="card">
+      <h3>This month's AI spend</h3>
+      <div class="usage-bar-outer"><div class="usage-bar-inner" style="width:${pct}%;"></div></div>
+      <p class="text-sm text-muted mt8">$${(usage.total_cents / 100).toFixed(2)} of $${(usage.cap_cents / 100).toFixed(2)}${usage.overridden ? ' — parent override active' : ''}</p>
+      <label class="text-sm">Parent unlock password</label>
+      <input type="password" id="settingsOverridePassword" placeholder="Password">
+      ${S.overrideError ? `<div class="error-box mt8">${eh(S.overrideError)}</div>` : ''}
+      <button class="btn btn-secondary mt8" id="settingsOverrideBtn">Unlock for this month</button>
+    </div>
+  `;
+}
+function bindSettings(){
+  on('backBtn', 'click', () => setState({ screen: 'home', overrideError: null }));
+  on('ageModeSelect', 'change', (e) => updateAgeMode(e.target.value));
+  on('settingsOverrideBtn', 'click', async () => {
+    const password = document.getElementById('settingsOverridePassword').value;
+    setState({ overrideBusy: true, overrideError: null });
+    try {
+      await api('/api/override', { method: 'POST', body: { password } });
+      const usage = await api('/api/usage');
+      setState({ usage, overrideBusy: false });
+    } catch (err) {
+      setState({ overrideBusy: false, overrideError: 'Incorrect password.' });
+    }
+  });
+}
+
+const SCREENS = {
+  boot: () => `<div class="card text-center"><div class="spinner"></div></div>`,
+  profilePicker: screenProfilePicker,
+  home: screenHome,
+  newStoryTopic: screenNewStoryTopic,
+  blanksList: screenBlanksList,
+  storyReveal: screenStoryReveal,
+  rateAndSave: screenRateAndSave,
+  myStories: screenMyStories,
+  frameworkBrowser: screenFrameworkBrowser,
+  settings: screenSettings,
+};
+const BINDERS = {
+  profilePicker: bindProfilePicker,
+  home: bindHome,
+  newStoryTopic: bindNewStoryTopic,
+  blanksList: bindBlanksList,
+  storyReveal: bindStoryReveal,
+  rateAndSave: bindRateAndSave,
+  myStories: bindMyStories,
+  frameworkBrowser: bindFrameworkBrowser,
+  settings: bindSettings,
+};
+
+function renderOverlay(){
+  if (!S.showOverridePrompt) return '';
+  return `
+    <div class="overlay" id="overrideOverlay">
+      <div class="overlay-card">
+        <h3>Parent unlock needed</h3>
+        <p class="text-sm text-muted">This family has reached the monthly story budget. Enter the parent password to keep going.</p>
+        <input type="password" id="overridePasswordInput" placeholder="Password">
+        ${S.overrideError ? `<div class="error-box mt8">${eh(S.overrideError)}</div>` : ''}
+        <div class="row mt12">
+          <button class="btn btn-primary" id="overrideSubmitBtn" ${S.overrideBusy ? 'disabled' : ''}>${S.overrideBusy ? 'Checking…' : 'Unlock'}</button>
+          <button class="btn btn-secondary" id="overrideCancelBtn">Cancel</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+function bindOverlay(){
+  if (!S.showOverridePrompt) return;
+  on('overrideSubmitBtn', 'click', () => {
+    const password = document.getElementById('overridePasswordInput').value;
+    submitOverridePassword(password);
+  });
+  on('overrideCancelBtn', 'click', () => { pendingRetryFn = null; setState({ showOverridePrompt: false, overrideError: null }); });
+}
+
+function render(){
+  const screenFn = SCREENS[S.screen] || SCREENS.boot;
+  document.getElementById('app').innerHTML = screenFn() + renderOverlay();
+  const binder = BINDERS[S.screen];
+  if (binder) binder();
+  bindOverlay();
+}
+
+boot();
+</script>
 </body>
 </html>

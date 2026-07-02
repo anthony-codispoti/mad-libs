@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "madlibs-static",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "3458", "--directory", "/Users/anthony/iCloud Drive (Archive)/Documents/Claude Code/Mad Libs App"],
+      "port": 3458
+    }
+  ]
+}
